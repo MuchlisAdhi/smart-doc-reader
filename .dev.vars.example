@@ -1,0 +1,4 @@
+# Copy this file to .dev.vars and fill in real values for local development
+# .dev.vars is read by wrangler for local Pages dev environment
+GROQ_API_KEY="gsk_your_groq_api_key_here"
+JWT_SECRET="your-very-long-random-secret-min-32-chars"

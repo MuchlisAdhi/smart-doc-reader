@@ -1,0 +1,24 @@
+name = "smart-doc-reader"
+compatibility_date = "2024-12-30"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".svelte-kit/cloudflare"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "smart-doc-reader-db"
+database_id = "cf426cb0-1003-42e6-9fec-99556881024c"
+migrations_dir = "migrations"
+
+# R2 Bucket binding for file storage
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "smart-doc-reader-files"
+
+# Environment variables (use `wrangler pages secret put` for secrets in production)
+[vars]
+APP_NAME = "Smart Document Reader"
+
+# Secrets to set via `wrangler pages secret put`:
+# - GROQ_API_KEY
+# - JWT_SECRET

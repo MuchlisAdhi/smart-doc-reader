@@ -1,0 +1,40 @@
+{
+  "name": "smart-doc-reader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "wrangler pages dev .svelte-kit/cloudflare",
+    "deploy": "npm run build && wrangler pages deploy .svelte-kit/cloudflare",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "prettier --check . && eslint .",
+    "format": "prettier --write .",
+    "db:create": "wrangler d1 create smart-doc-reader-db",
+    "db:migrate:local": "wrangler d1 migrations apply smart-doc-reader-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply smart-doc-reader-db --remote",
+    "db:seed:local": "wrangler d1 execute smart-doc-reader-db --local --file=./migrations/seed.sql",
+    "db:seed:remote": "wrangler d1 execute smart-doc-reader-db --remote --file=./migrations/seed.sql",
+    "r2:create": "wrangler r2 bucket create smart-doc-reader-files"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "@sveltejs/adapter-cloudflare": "^7.2.8",
+    "@sveltejs/kit": "^2.60.1",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@types/node": "^22.10.5",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "svelte": "^5.16.1",
+    "svelte-check": "^4.1.1",
+    "tailwindcss": "^3.4.17",
+    "tslib": "^2.8.1",
+    "typescript": "^5.7.2",
+    "vite": "^8.0.13",
+    "wrangler": "^4.92.0"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.10.38"
+  }
+}
