@@ -33,6 +33,7 @@
   let doc = $state<any>(null);
   let items = $state<DocumentItem[]>([]);
   let confidence = $state<ConfidenceFields | null>(null);
+  let qualityIssues = $state<string[]>([]);
 
   // Editable form fields
   let vendor = $state('');
@@ -62,6 +63,14 @@
       doc = data.document;
       items = data.items || [];
       confidence = data.confidence_fields;
+
+      // Extract quality issues from raw_extraction
+      if (doc.raw_extraction) {
+        try {
+          const raw = JSON.parse(doc.raw_extraction);
+          qualityIssues = raw.quality_issues || [];
+        } catch { qualityIssues = []; }
+      }
 
       // Populate form
       vendor = doc.vendor || '';
@@ -229,6 +238,34 @@
     </div>
   {/if}
 
+  <!-- Quality issues banner -->
+  {#if qualityIssues.length > 0}
+    <div class="mb-4 rounded-lg bg-slate-100 border border-slate-300 px-4 py-3">
+      <p class="text-sm font-medium text-slate-700">📷 Image quality issues detected</p>
+      <div class="mt-2 flex flex-wrap gap-2">
+        {#each qualityIssues as issue}
+          <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium
+            {issue === 'blurry' ? 'bg-orange-100 text-orange-700' : 
+             issue === 'dark' ? 'bg-gray-200 text-gray-700' :
+             issue === 'tilted' || issue === 'skewed' ? 'bg-purple-100 text-purple-700' :
+             issue === 'low_resolution' ? 'bg-red-100 text-red-700' :
+             issue === 'partially_censored' ? 'bg-slate-200 text-slate-700' :
+             issue === 'handwritten_text' ? 'bg-blue-100 text-blue-700' :
+             issue === 'noise' ? 'bg-yellow-100 text-yellow-700' :
+             issue === 'overexposed' ? 'bg-amber-100 text-amber-700' :
+             issue === 'crumpled' ? 'bg-rose-100 text-rose-700' :
+             'bg-slate-100 text-slate-600'}">
+            {#if issue === 'blurry'}📷{:else if issue === 'dark'}🌑{:else if issue === 'tilted' || issue === 'skewed'}↗️{:else if issue === 'low_resolution'}🔍{:else if issue === 'partially_censored'}█{:else if issue === 'handwritten_text'}✍️{:else if issue === 'noise'}〰️{:else if issue === 'overexposed'}☀️{:else if issue === 'crumpled'}📃{:else}⚠️{/if}
+            {issue.replace('_', ' ')}
+          </span>
+        {/each}
+      </div>
+      <p class="mt-2 text-xs text-slate-500">
+        These issues may affect extraction accuracy. Please carefully verify all fields below.
+      </p>
+    </div>
+  {/if}
+
   <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
     <!-- Left: Image preview -->
     <div class="lg:col-span-1">
@@ -269,6 +306,12 @@
         {#if doc.processing_time_ms}
           <div class="px-4 py-2 border-t border-slate-100 text-xs text-slate-400">
             Processed in {doc.processing_time_ms}ms • {doc.ai_model}
+          </div>
+        {/if}
+        {#if qualityIssues.length > 0}
+          <div class="px-4 py-2 border-t border-slate-100">
+            <p class="text-xs font-medium text-slate-500 mb-1">Quality Assessment</p>
+            <p class="text-xs text-slate-400">{qualityIssues.length} issue{qualityIssues.length > 1 ? 's' : ''}: {qualityIssues.join(', ')}</p>
           </div>
         {/if}
       </div>

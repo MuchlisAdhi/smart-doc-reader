@@ -114,7 +114,14 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
       // 5. Extract via Groq Vision AI
       const extraction = await extractDocument(imageBase64, mimeType, platform.env.GROQ_API_KEY);
 
-      // 6. Update document with extraction results
+      // 6. Build notes (include quality issues if any)
+      let finalNotes = extraction.data.notes || '';
+      if (extraction.data.quality_issues && extraction.data.quality_issues.length > 0) {
+        const qualityNote = `[Quality issues detected: ${extraction.data.quality_issues.join(', ')}]`;
+        finalNotes = finalNotes ? `${qualityNote}\n${finalNotes}` : qualityNote;
+      }
+
+      // 7. Update document with extraction results
       await updateDocument(platform.env.DB, docId, {
         vendor: extraction.data.vendor,
         document_date: extraction.data.document_date,
@@ -124,7 +131,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
         currency: extraction.data.currency,
         document_number: extraction.data.document_number,
         document_type: extraction.data.document_type,
-        notes: extraction.data.notes,
+        notes: finalNotes || null,
         raw_extraction: JSON.stringify(extraction.data),
         confidence_overall: extraction.data.confidence.overall,
         confidence_fields: JSON.stringify(extraction.data.confidence),
@@ -133,7 +140,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
         status: 'completed'
       });
 
-      // 7. Save line items
+      // 8. Save line items
       if (extraction.data.items && extraction.data.items.length > 0) {
         await createDocumentItems(
           platform.env.DB,

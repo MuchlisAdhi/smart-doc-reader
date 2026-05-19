@@ -2,6 +2,8 @@
  * Groq Vision AI - Document extraction via LLM
  * Uses Llama Vision model for OCR + structured data extraction in a single call.
  * Advantages: fast inference (~1-3s), free tier, native vision, JSON mode.
+ * 
+ * Enhanced for degraded documents: blur, dark, tilted, censored, handwritten.
  */
 
 export interface ExtractedDocument {
@@ -16,6 +18,7 @@ export interface ExtractedDocument {
   items: ExtractedItem[];
   notes: string | null;
   confidence: ConfidenceFields;
+  quality_issues: string[];           // detected image quality problems
 }
 
 export interface ExtractedItem {
@@ -38,20 +41,33 @@ export interface ConfidenceFields {
   overall: number;
 }
 
-const EXTRACTION_PROMPT = `You are a precise financial document OCR system. Analyze the uploaded receipt/invoice image and extract structured data.
+const EXTRACTION_PROMPT = `You are an expert financial document OCR system designed to handle even poor-quality documents. Analyze the uploaded image and extract structured data.
+
+DOCUMENT QUALITY HANDLING:
+- The document may be blurry, dark, tilted, partially censored/redacted, or low resolution.
+- Some text may be handwritten, stamped, or overlaid on printed text.
+- Parts of the document may be intentionally blacked out or obscured for privacy.
+- The document may be a photo taken at an angle, not a flat scan.
+- Do your BEST to read what is visible and clearly indicate uncertainty.
 
 INSTRUCTIONS:
-1. Extract all visible text and financial data from the document.
-2. For each field, provide a confidence score from 0.0 to 1.0:
-   - 1.0 = clearly legible, very confident
-   - 0.7-0.9 = partially legible, somewhat confident
-   - 0.3-0.6 = blurry/unclear, low confidence (guess)
-   - 0.0-0.2 = not found or unreadable
-3. Dates must be in ISO format YYYY-MM-DD.
-4. Amounts must be numeric (no currency symbols).
-5. Currency should be ISO 4217 code (e.g., IDR, USD, SGD, EUR).
-6. If the image is not a receipt/invoice, set document_type to "other" and set overall confidence very low.
-7. For blurry/dark/tilted documents, do your best and reflect uncertainty in confidence scores.
+1. First, assess image quality. Report any issues in the "quality_issues" array.
+   Possible issues: "blurry", "dark", "tilted", "low_resolution", "partially_censored", "handwritten_text", "noise", "overexposed", "skewed", "crumpled"
+2. Extract all visible text and financial data from the document.
+3. For each field, provide a STRICT confidence score from 0.0 to 1.0:
+   - 0.9-1.0 = clearly legible, unambiguous, very confident
+   - 0.7-0.8 = mostly legible, minor uncertainty
+   - 0.4-0.6 = partially legible, significant uncertainty (educated guess)
+   - 0.1-0.3 = barely visible, very uncertain (wild guess from context)
+   - 0.0 = completely unreadable or not present
+4. Dates must be in ISO format YYYY-MM-DD. If year is 2-digit (e.g. "14/03/26"), infer full year from context.
+5. Amounts must be numeric (no currency symbols). Use dot as decimal separator.
+6. Currency should be ISO 4217 code (e.g., IDR, USD, SGD, EUR). Infer from context (location, currency symbol) if not explicit.
+7. If the image is NOT a receipt/invoice/financial document, set document_type to "other" and overall confidence to 0.1.
+8. For censored/redacted fields, set their value to null and confidence to 0.0.
+9. If handwritten text is present, attempt to read it and note in "notes" field.
+10. For tilted/rotated documents, mentally rotate and read normally.
+11. IMPORTANT: When a field could have multiple interpretations (e.g., a blurred digit could be 5 or 6), pick the most likely value but lower the confidence.
 
 RESPOND ONLY WITH VALID JSON matching this exact schema:
 {
@@ -65,14 +81,15 @@ RESPOND ONLY WITH VALID JSON matching this exact schema:
   "document_type": "receipt | invoice | other",
   "items": [
     {
-      "description": "item name",
+      "description": "item name/description",
       "quantity": number or null,
       "unit_price": number or null,
       "total": number or null,
       "confidence": 0.0-1.0
     }
   ],
-  "notes": "any additional text/notes visible or null",
+  "notes": "handwritten text, stamps, annotations, or other observations. null if none.",
+  "quality_issues": ["array of detected quality problems, empty if image is clean"],
   "confidence": {
     "vendor": 0.0-1.0,
     "document_date": 0.0-1.0,
@@ -133,7 +150,19 @@ export async function extractDocument(
     throw new Error('No content in Groq response');
   }
 
-  const parsed = JSON.parse(content) as ExtractedDocument;
+  let parsed: ExtractedDocument;
+  try {
+    parsed = JSON.parse(content) as ExtractedDocument;
+  } catch (parseErr) {
+    // If JSON parsing fails, try to extract JSON from the response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      parsed = JSON.parse(jsonMatch[0]) as ExtractedDocument;
+    } else {
+      throw new Error('Failed to parse AI response as JSON');
+    }
+  }
+
   const processingTimeMs = Date.now() - startTime;
 
   // Validate and sanitize confidence scores
@@ -156,6 +185,23 @@ export async function extractDocument(
       items: 0,
       overall: 0
     };
+  }
+
+  // Ensure quality_issues is an array
+  if (!Array.isArray(parsed.quality_issues)) {
+    parsed.quality_issues = [];
+  }
+
+  // Ensure items is an array
+  if (!Array.isArray(parsed.items)) {
+    parsed.items = [];
+  }
+
+  // Sanitize items confidence
+  for (const item of parsed.items) {
+    if (typeof item.confidence !== 'number' || item.confidence < 0 || item.confidence > 1) {
+      item.confidence = 0.5;
+    }
   }
 
   return {
