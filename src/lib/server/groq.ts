@@ -1,32 +1,47 @@
 /**
  * Groq Vision AI - Document extraction via LLM
  * Uses Llama Vision model for OCR + structured data extraction in a single call.
- * Advantages: fast inference (~1-3s), free tier, native vision, JSON mode.
  * 
- * Enhanced for degraded documents: blur, dark, tilted, censored, handwritten.
+ * Optimized for:
+ * - B2B invoices (purchase orders, supplier invoices, e-commerce orders)
+ * - Mixed Indonesian + English language documents
+ * - Single invoice per file
+ * - Degraded documents: blur, dark, tilted, censored, handwritten
  */
 
 export interface ExtractedDocument {
   vendor: string | null;
-  document_date: string | null;       // ISO YYYY-MM-DD
+  vendor_address: string | null;        // vendor/seller address
+  buyer: string | null;                 // buyer/client name (B2B)
+  buyer_address: string | null;         // buyer address
+  document_date: string | null;         // ISO YYYY-MM-DD
+  due_date: string | null;              // payment due date
   total: number | null;
   subtotal: number | null;
   tax: number | null;
-  currency: string | null;            // ISO 4217 e.g. IDR, USD, SGD
-  document_number: string | null;
-  document_type: 'receipt' | 'invoice' | 'other';
+  tax_rate: string | null;              // e.g. "11%", "PPN 11%"
+  discount: number | null;              // total discount amount
+  shipping: number | null;              // shipping/delivery cost
+  currency: string | null;              // ISO 4217 e.g. IDR, USD, SGD
+  document_number: string | null;       // invoice/PO/order number
+  document_type: 'receipt' | 'invoice' | 'purchase_order' | 'delivery_note' | 'other';
+  payment_method: string | null;        // e.g. "Transfer Bank", "SPayLater", "COD"
+  payment_terms: string | null;         // e.g. "Net 30", "COD", "Due on receipt"
   items: ExtractedItem[];
   notes: string | null;
   confidence: ConfidenceFields;
-  quality_issues: string[];           // detected image quality problems
+  quality_issues: string[];
 }
 
 export interface ExtractedItem {
   description: string;
+  sku: string | null;                   // SKU/product code if visible
   quantity: number | null;
+  unit: string | null;                  // e.g. "pcs", "kg", "unit", "buah"
   unit_price: number | null;
+  discount: number | null;              // per-item discount
   total: number | null;
-  confidence: number;  // 0..1
+  confidence: number;
 }
 
 export interface ConfidenceFields {
@@ -41,55 +56,79 @@ export interface ConfidenceFields {
   overall: number;
 }
 
-const EXTRACTION_PROMPT = `You are an expert financial document OCR system designed to handle even poor-quality documents. Analyze the uploaded image and extract structured data.
+const EXTRACTION_PROMPT = `Anda adalah sistem OCR dokumen keuangan B2B (invoice/faktur). Analisis gambar dokumen yang diunggah dan ekstrak data terstruktur.
+
+KONTEKS:
+- Dokumen bisa dalam Bahasa Indonesia, Inggris, atau campuran keduanya.
+- Ini adalah 1 file = 1 invoice/faktur (tidak ada multi-dokumen dalam 1 file).
+- Fokus pada invoice B2B: faktur supplier, purchase order, nota pesanan marketplace (Shopee, Tokopedia, dll), invoice jasa, dll.
+- Kenali istilah Indonesia: "Subtotal", "Total Pembayaran", "Diskon", "Biaya Kirim/Pengiriman", "PPN/Pajak", "Tanggal", "No. Faktur/Invoice/Pesanan", "Metode Pembayaran", "Jatuh Tempo", "Rp", "Nama Penjual/Toko", "Nama Pembeli".
 
 DOCUMENT QUALITY HANDLING:
 - The document may be blurry, dark, tilted, partially censored/redacted, or low resolution.
 - Some text may be handwritten, stamped, or overlaid on printed text.
-- Parts of the document may be intentionally blacked out or obscured for privacy.
-- The document may be a photo taken at an angle, not a flat scan.
-- Do your BEST to read what is visible and clearly indicate uncertainty.
+- Parts may be blacked out for privacy. Do your BEST with what's visible.
+- Report quality issues detected.
 
 INSTRUCTIONS:
-1. First, assess image quality. Report any issues in the "quality_issues" array.
-   Possible issues: "blurry", "dark", "tilted", "low_resolution", "partially_censored", "handwritten_text", "noise", "overexposed", "skewed", "crumpled"
-2. Extract all visible text and financial data from the document.
-3. For each field, provide a STRICT confidence score from 0.0 to 1.0:
-   - 0.9-1.0 = clearly legible, unambiguous, very confident
+1. Assess image quality. Report issues in "quality_issues" array.
+   Possible: "blurry", "dark", "tilted", "low_resolution", "partially_censored", "handwritten_text", "noise", "overexposed", "skewed", "crumpled"
+2. Extract ALL visible financial data. For B2B invoices, prioritize:
+   - Vendor (seller/penjual/toko)
+   - Buyer (pembeli/pelanggan) if visible
+   - Invoice/order number (No. Faktur/Pesanan/Invoice/PO)
+   - Date (tanggal transaksi/faktur)
+   - Due date (jatuh tempo) if present
+   - Line items with SKU, qty, unit price, discount, subtotal
+   - Subtotal, tax (PPN), discounts (diskon/voucher), shipping (ongkir), total
+   - Payment method & terms
+3. Confidence scores (STRICT):
+   - 0.9-1.0 = clearly legible, unambiguous
    - 0.7-0.8 = mostly legible, minor uncertainty
-   - 0.4-0.6 = partially legible, significant uncertainty (educated guess)
-   - 0.1-0.3 = barely visible, very uncertain (wild guess from context)
-   - 0.0 = completely unreadable or not present
-4. Dates must be in ISO format YYYY-MM-DD. If year is 2-digit (e.g. "14/03/26"), infer full year from context.
-5. Amounts must be numeric (no currency symbols). Use dot as decimal separator.
-6. Currency should be ISO 4217 code (e.g., IDR, USD, SGD, EUR). Infer from context (location, currency symbol) if not explicit.
-7. If the image is NOT a receipt/invoice/financial document, set document_type to "other" and overall confidence to 0.1.
-8. For censored/redacted fields, set their value to null and confidence to 0.0.
-9. If handwritten text is present, attempt to read it and note in "notes" field.
-10. For tilted/rotated documents, mentally rotate and read normally.
-11. IMPORTANT: When a field could have multiple interpretations (e.g., a blurred digit could be 5 or 6), pick the most likely value but lower the confidence.
+   - 0.4-0.6 = partially legible, educated guess
+   - 0.1-0.3 = barely visible, wild guess
+   - 0.0 = unreadable or not present
+4. Dates: ISO YYYY-MM-DD. If 2-digit year (e.g. "14/03/26"), infer century from context.
+5. Amounts: numeric only, no symbols. Use dot for decimal. Indonesian format "Rp399.000" = 399000 (thousands separator is dot in Indonesia).
+6. Currency: ISO 4217. "Rp" = IDR, "$" infer from context (USD/SGD/AUD).
+7. If NOT a financial document: document_type = "other", overall confidence = 0.1.
+8. Censored/redacted fields: value = null, confidence = 0.0.
+9. For marketplace orders (Shopee/Tokopedia/Lazada): vendor = seller/shop name, document_number = order number.
+10. IMPORTANT: "Total Pembayaran" in Indonesian invoices is the final amount paid (= total after all discounts/fees). Map this to "total".
 
-RESPOND ONLY WITH VALID JSON matching this exact schema:
+RESPOND ONLY WITH VALID JSON:
 {
-  "vendor": "string or null",
+  "vendor": "seller/shop/supplier name or null",
+  "vendor_address": "seller address or null",
+  "buyer": "buyer/customer name or null",
+  "buyer_address": "buyer address or null",
   "document_date": "YYYY-MM-DD or null",
-  "total": number or null,
-  "subtotal": number or null,
-  "tax": number or null,
-  "currency": "ISO 4217 code or null",
-  "document_number": "string or null",
-  "document_type": "receipt | invoice | other",
+  "due_date": "YYYY-MM-DD or null",
+  "total": number or null (final amount paid),
+  "subtotal": number or null (before tax/discount),
+  "tax": number or null (PPN/tax amount),
+  "tax_rate": "string like '11%' or 'PPN 11%' or null",
+  "discount": number or null (total discount, positive number),
+  "shipping": number or null (shipping/delivery cost),
+  "currency": "IDR/USD/SGD/etc or null",
+  "document_number": "invoice/order/PO number or null",
+  "document_type": "receipt | invoice | purchase_order | delivery_note | other",
+  "payment_method": "payment method string or null",
+  "payment_terms": "payment terms string or null",
   "items": [
     {
-      "description": "item name/description",
+      "description": "item/product name",
+      "sku": "SKU/product code or null",
       "quantity": number or null,
+      "unit": "pcs/kg/unit/buah/etc or null",
       "unit_price": number or null,
+      "discount": number or null,
       "total": number or null,
       "confidence": 0.0-1.0
     }
   ],
-  "notes": "handwritten text, stamps, annotations, or other observations. null if none.",
-  "quality_issues": ["array of detected quality problems, empty if image is clean"],
+  "notes": "handwritten text, stamps, annotations, additional info, or null",
+  "quality_issues": ["detected problems array, empty if clean"],
   "confidence": {
     "vendor": 0.0-1.0,
     "document_date": 0.0-1.0,
@@ -154,7 +193,6 @@ export async function extractDocument(
   try {
     parsed = JSON.parse(content) as ExtractedDocument;
   } catch (parseErr) {
-    // If JSON parsing fails, try to extract JSON from the response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       parsed = JSON.parse(jsonMatch[0]) as ExtractedDocument;
@@ -203,6 +241,17 @@ export async function extractDocument(
       item.confidence = 0.5;
     }
   }
+
+  // Default missing fields
+  if (!parsed.vendor_address) parsed.vendor_address = null;
+  if (!parsed.buyer) parsed.buyer = null;
+  if (!parsed.buyer_address) parsed.buyer_address = null;
+  if (!parsed.due_date) parsed.due_date = null;
+  if (!parsed.tax_rate) parsed.tax_rate = null;
+  if (parsed.discount === undefined) parsed.discount = null;
+  if (parsed.shipping === undefined) parsed.shipping = null;
+  if (!parsed.payment_method) parsed.payment_method = null;
+  if (!parsed.payment_terms) parsed.payment_terms = null;
 
   return {
     data: parsed,

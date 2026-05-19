@@ -1,5 +1,6 @@
 /**
  * Database helper utilities for D1
+ * Optimized for B2B invoices (mixed ID/EN)
  */
 
 import type { D1Database } from '@cloudflare/workers-types';
@@ -15,20 +16,32 @@ export interface DocumentRow {
   file_type: string;
   file_size: number;
   storage_key: string;
+  // Core fields
   vendor: string | null;
+  vendor_address: string | null;
+  buyer: string | null;
+  buyer_address: string | null;
   document_date: string | null;
+  due_date: string | null;
   total: number | null;
   subtotal: number | null;
   tax: number | null;
+  tax_rate: string | null;
+  discount: number | null;
+  shipping: number | null;
   currency: string | null;
   document_number: string | null;
   document_type: string | null;
+  payment_method: string | null;
+  payment_terms: string | null;
   notes: string | null;
+  // AI metadata
   raw_extraction: string | null;
   confidence_overall: number | null;
   confidence_fields: string | null;
   ai_model: string | null;
   processing_time_ms: number | null;
+  // Status
   status: string;
   error_message: string | null;
   is_verified: number;
@@ -41,8 +54,11 @@ export interface DocumentItemRow {
   document_id: string;
   position: number;
   description: string | null;
+  sku: string | null;
   quantity: number | null;
+  unit: string | null;
   unit_price: number | null;
+  discount: number | null;
   total: number | null;
   confidence: number | null;
   created_at: number;
@@ -91,16 +107,20 @@ export async function createDocument(
     .prepare(`
       INSERT INTO documents (
         id, user_id, file_name, file_type, file_size, storage_key,
-        vendor, document_date, total, subtotal, tax, currency,
-        document_number, document_type, notes,
+        vendor, vendor_address, buyer, buyer_address,
+        document_date, due_date, total, subtotal, tax, tax_rate,
+        discount, shipping, currency, document_number, document_type,
+        payment_method, payment_terms, notes,
         raw_extraction, confidence_overall, confidence_fields,
         ai_model, processing_time_ms, status, error_message, is_verified
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .bind(
       doc.id, doc.user_id, doc.file_name, doc.file_type, doc.file_size, doc.storage_key,
-      doc.vendor, doc.document_date, doc.total, doc.subtotal, doc.tax, doc.currency,
-      doc.document_number, doc.document_type, doc.notes,
+      doc.vendor, doc.vendor_address, doc.buyer, doc.buyer_address,
+      doc.document_date, doc.due_date, doc.total, doc.subtotal, doc.tax, doc.tax_rate,
+      doc.discount, doc.shipping, doc.currency, doc.document_number, doc.document_type,
+      doc.payment_method, doc.payment_terms, doc.notes,
       doc.raw_extraction, doc.confidence_overall, doc.confidence_fields,
       doc.ai_model, doc.processing_time_ms, doc.status, doc.error_message, doc.is_verified
     )
@@ -113,10 +133,12 @@ export async function updateDocument(
   fields: Partial<DocumentRow>
 ): Promise<void> {
   const allowed = [
-    'vendor', 'document_date', 'total', 'subtotal', 'tax', 'currency',
-    'document_number', 'document_type', 'notes', 'raw_extraction',
-    'confidence_overall', 'confidence_fields', 'ai_model', 'processing_time_ms',
-    'status', 'error_message', 'is_verified'
+    'vendor', 'vendor_address', 'buyer', 'buyer_address',
+    'document_date', 'due_date', 'total', 'subtotal', 'tax', 'tax_rate',
+    'discount', 'shipping', 'currency', 'document_number', 'document_type',
+    'payment_method', 'payment_terms', 'notes',
+    'raw_extraction', 'confidence_overall', 'confidence_fields',
+    'ai_model', 'processing_time_ms', 'status', 'error_message', 'is_verified'
   ];
   
   const updates: string[] = [];
@@ -158,6 +180,7 @@ export async function getDocuments(
   opts: {
     search?: string;
     vendor?: string;
+    buyer?: string;
     dateFrom?: string;
     dateTo?: string;
     status?: string;
@@ -176,6 +199,10 @@ export async function getDocuments(
     where += ' AND vendor LIKE ?';
     binds.push(`%${opts.vendor}%`);
   }
+  if (opts.buyer) {
+    where += ' AND buyer LIKE ?';
+    binds.push(`%${opts.buyer}%`);
+  }
   if (opts.dateFrom) {
     where += ' AND document_date >= ?';
     binds.push(opts.dateFrom);
@@ -189,19 +216,17 @@ export async function getDocuments(
     binds.push(opts.status);
   }
   if (opts.search) {
-    where += ' AND (vendor LIKE ? OR file_name LIKE ? OR document_number LIKE ?)';
+    where += ' AND (vendor LIKE ? OR buyer LIKE ? OR file_name LIKE ? OR document_number LIKE ?)';
     const term = `%${opts.search}%`;
-    binds.push(term, term, term);
+    binds.push(term, term, term, term);
   }
 
-  // Count
   const countResult = await db
     .prepare(`SELECT COUNT(*) as count FROM documents ${where}`)
     .bind(...binds)
     .first<{ count: number }>();
   const total = countResult?.count || 0;
 
-  // Fetch
   const fetchBinds = [...binds, limit, offset];
   const results = await db
     .prepare(`SELECT * FROM documents ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
@@ -224,16 +249,29 @@ export async function deleteDocument(db: D1Database, id: string, userId: string)
 export async function createDocumentItems(
   db: D1Database,
   documentId: string,
-  items: Array<{ description: string | null; quantity: number | null; unit_price: number | null; total: number | null; confidence: number | null }>
+  items: Array<{
+    description: string | null;
+    sku?: string | null;
+    quantity: number | null;
+    unit?: string | null;
+    unit_price: number | null;
+    discount?: number | null;
+    total: number | null;
+    confidence: number | null;
+  }>
 ): Promise<void> {
   if (items.length === 0) return;
 
   const stmt = db.prepare(
-    'INSERT INTO document_items (id, document_id, position, description, quantity, unit_price, total, confidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO document_items (id, document_id, position, description, sku, quantity, unit, unit_price, discount, total, confidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
 
   const batch = items.map((item, index) =>
-    stmt.bind(generateId(), documentId, index, item.description, item.quantity, item.unit_price, item.total, item.confidence)
+    stmt.bind(
+      generateId(), documentId, index,
+      item.description, item.sku || null, item.quantity, item.unit || null,
+      item.unit_price, item.discount || null, item.total, item.confidence
+    )
   );
 
   await db.batch(batch);

@@ -257,6 +257,9 @@
             </div>
             <div class="mt-1 flex items-center gap-3 text-xs text-slate-500">
               <span>{formatDate(doc.document_date)}</span>
+              {#if doc.buyer}
+                <span>→ {doc.buyer}</span>
+              {/if}
               <span>{doc.file_name}</span>
             </div>
           </div>

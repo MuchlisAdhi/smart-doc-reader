@@ -42,13 +42,22 @@ export const PUT: RequestHandler = async ({ params, request, locals, platform })
   // Update main fields
   await updateDocument(platform.env.DB, params.id, {
     vendor: body.vendor ?? doc.vendor,
+    vendor_address: body.vendor_address ?? doc.vendor_address,
+    buyer: body.buyer ?? doc.buyer,
+    buyer_address: body.buyer_address ?? doc.buyer_address,
     document_date: body.document_date ?? doc.document_date,
+    due_date: body.due_date ?? doc.due_date,
     total: body.total !== undefined ? parseFloat(body.total) || null : doc.total,
     subtotal: body.subtotal !== undefined ? parseFloat(body.subtotal) || null : doc.subtotal,
     tax: body.tax !== undefined ? parseFloat(body.tax) || null : doc.tax,
+    tax_rate: body.tax_rate ?? doc.tax_rate,
+    discount: body.discount !== undefined ? parseFloat(body.discount) || null : doc.discount,
+    shipping: body.shipping !== undefined ? parseFloat(body.shipping) || null : doc.shipping,
     currency: body.currency ?? doc.currency,
     document_number: body.document_number ?? doc.document_number,
     document_type: body.document_type ?? doc.document_type,
+    payment_method: body.payment_method ?? doc.payment_method,
+    payment_terms: body.payment_terms ?? doc.payment_terms,
     notes: body.notes ?? doc.notes,
     is_verified: body.is_verified !== undefined ? (body.is_verified ? 1 : 0) : doc.is_verified,
     status: body.is_verified ? 'reviewed' : doc.status
@@ -63,8 +72,11 @@ export const PUT: RequestHandler = async ({ params, request, locals, platform })
         params.id,
         body.items.map((item: any) => ({
           description: item.description || null,
+          sku: item.sku || null,
           quantity: item.quantity !== undefined ? parseFloat(item.quantity) || null : null,
+          unit: item.unit || null,
           unit_price: item.unit_price !== undefined ? parseFloat(item.unit_price) || null : null,
+          discount: item.discount !== undefined ? parseFloat(item.discount) || null : null,
           total: item.total !== undefined ? parseFloat(item.total) || null : null,
           confidence: item.confidence ?? 1.0
         }))

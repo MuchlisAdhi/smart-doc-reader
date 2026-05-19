@@ -64,7 +64,7 @@ export const GET: RequestHandler = async ({ locals, platform, url }) => {
   // CSV export
   const csvRows: string[] = [];
   csvRows.push(
-    'ID,File Name,Vendor,Date,Total,Subtotal,Tax,Currency,Document Number,Type,Notes,Status,Verified,Created At'
+    'ID,File Name,Vendor,Buyer,Date,Due Date,Total,Subtotal,Tax,Tax Rate,Discount,Shipping,Currency,Document Number,Type,Payment Method,Payment Terms,Notes,Status,Verified,Created At'
   );
 
   for (const doc of documents) {
@@ -73,13 +73,20 @@ export const GET: RequestHandler = async ({ locals, platform, url }) => {
         doc.id,
         csvEscape(doc.file_name),
         csvEscape(doc.vendor || ''),
+        csvEscape(doc.buyer || ''),
         doc.document_date || '',
+        doc.due_date || '',
         doc.total?.toString() || '',
         doc.subtotal?.toString() || '',
         doc.tax?.toString() || '',
+        doc.tax_rate || '',
+        doc.discount?.toString() || '',
+        doc.shipping?.toString() || '',
         doc.currency || '',
         csvEscape(doc.document_number || ''),
         doc.document_type || '',
+        csvEscape(doc.payment_method || ''),
+        csvEscape(doc.payment_terms || ''),
         csvEscape(doc.notes || ''),
         doc.status,
         doc.is_verified ? 'Yes' : 'No',

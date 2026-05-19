@@ -37,15 +37,24 @@
 
   // Editable form fields
   let vendor = $state('');
+  let vendorAddress = $state('');
+  let buyer = $state('');
+  let buyerAddress = $state('');
   let documentDate = $state('');
+  let dueDate = $state('');
   let total = $state('');
   let subtotal = $state('');
   let tax = $state('');
+  let taxRate = $state('');
+  let discount = $state('');
+  let shipping = $state('');
   let currency = $state('');
   let documentNumber = $state('');
   let documentType = $state('');
+  let paymentMethod = $state('');
+  let paymentTerms = $state('');
   let notes = $state('');
-  let editItems = $state<Array<{ description: string; quantity: string; unit_price: string; total: string; confidence: number }>>([]);
+  let editItems = $state<Array<{ description: string; sku: string; quantity: string; unit: string; unit_price: string; discount: string; total: string; confidence: number }>>([]);
 
   $effect(() => {
     loadDocument();
@@ -74,18 +83,30 @@
 
       // Populate form
       vendor = doc.vendor || '';
+      vendorAddress = doc.vendor_address || '';
+      buyer = doc.buyer || '';
+      buyerAddress = doc.buyer_address || '';
       documentDate = doc.document_date || '';
+      dueDate = doc.due_date || '';
       total = doc.total?.toString() || '';
       subtotal = doc.subtotal?.toString() || '';
       tax = doc.tax?.toString() || '';
+      taxRate = doc.tax_rate || '';
+      discount = doc.discount?.toString() || '';
+      shipping = doc.shipping?.toString() || '';
       currency = doc.currency || '';
       documentNumber = doc.document_number || '';
       documentType = doc.document_type || '';
+      paymentMethod = doc.payment_method || '';
+      paymentTerms = doc.payment_terms || '';
       notes = doc.notes || '';
-      editItems = items.map((i) => ({
+      editItems = items.map((i: any) => ({
         description: i.description || '',
+        sku: i.sku || '',
         quantity: i.quantity?.toString() || '',
+        unit: i.unit || '',
         unit_price: i.unit_price?.toString() || '',
+        discount: i.discount?.toString() || '',
         total: i.total?.toString() || '',
         confidence: i.confidence || 0
       }));
@@ -104,18 +125,30 @@
     try {
       const body: any = {
         vendor: vendor || null,
+        vendor_address: vendorAddress || null,
+        buyer: buyer || null,
+        buyer_address: buyerAddress || null,
         document_date: documentDate || null,
+        due_date: dueDate || null,
         total: total || null,
         subtotal: subtotal || null,
         tax: tax || null,
+        tax_rate: taxRate || null,
+        discount: discount || null,
+        shipping: shipping || null,
         currency: currency || null,
         document_number: documentNumber || null,
         document_type: documentType || null,
+        payment_method: paymentMethod || null,
+        payment_terms: paymentTerms || null,
         notes: notes || null,
         items: editItems.map((item) => ({
           description: item.description || null,
+          sku: item.sku || null,
           quantity: item.quantity || null,
+          unit: item.unit || null,
           unit_price: item.unit_price || null,
+          discount: item.discount || null,
           total: item.total || null,
           confidence: item.confidence
         })),
@@ -145,7 +178,7 @@
   }
 
   function addItem() {
-    editItems = [...editItems, { description: '', quantity: '', unit_price: '', total: '', confidence: 1 }];
+    editItems = [...editItems, { description: '', sku: '', quantity: '', unit: '', unit_price: '', discount: '', total: '', confidence: 1 }];
   }
 
   function removeItem(index: number) {
@@ -327,22 +360,68 @@
           </p>
 
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <!-- Vendor -->
-            <div class="sm:col-span-2">
+            <!-- Vendor / Seller -->
+            <div>
               <div class="flex items-center gap-2 mb-1">
-                <label for="vendor" class="label mb-0">Vendor / Merchant</label>
+                <label for="vendor" class="label mb-0">Vendor / Seller</label>
                 <span class="{getConfidenceIconColor(getFieldConfidence('vendor'))} text-xs" title={getConfidenceTip(getFieldConfidence('vendor'))}>{getConfidenceIconText(getFieldConfidence('vendor'))}</span>
               </div>
-              <input id="vendor" type="text" bind:value={vendor} class="input {getConfidenceColor(getFieldConfidence('vendor'))}" placeholder="e.g. Starbucks" />
+              <input id="vendor" type="text" bind:value={vendor} class="input {getConfidenceColor(getFieldConfidence('vendor'))}" placeholder="Nama penjual/toko" />
+            </div>
+
+            <!-- Buyer -->
+            <div>
+              <label for="buyer" class="label">Buyer / Pembeli</label>
+              <input id="buyer" type="text" bind:value={buyer} class="input" placeholder="Nama pembeli" />
+            </div>
+
+            <!-- Vendor Address -->
+            <div>
+              <label for="vendorAddr" class="label">Vendor Address</label>
+              <input id="vendorAddr" type="text" bind:value={vendorAddress} class="input" placeholder="Alamat penjual" />
+            </div>
+
+            <!-- Buyer Address -->
+            <div>
+              <label for="buyerAddr" class="label">Buyer Address</label>
+              <input id="buyerAddr" type="text" bind:value={buyerAddress} class="input" placeholder="Alamat pembeli" />
+            </div>
+
+            <!-- Document Number -->
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <label for="docNum" class="label mb-0">Invoice / Order No.</label>
+                <span class="{getConfidenceIconColor(getFieldConfidence('document_number'))} text-xs" title={getConfidenceTip(getFieldConfidence('document_number'))}>{getConfidenceIconText(getFieldConfidence('document_number'))}</span>
+              </div>
+              <input id="docNum" type="text" bind:value={documentNumber} class="input {getConfidenceColor(getFieldConfidence('document_number'))}" placeholder="INV-001 / No. Pesanan" />
+            </div>
+
+            <!-- Document Type -->
+            <div>
+              <label for="docType" class="label">Type</label>
+              <select id="docType" bind:value={documentType} class="input">
+                <option value="">Select</option>
+                <option value="invoice">Invoice / Faktur</option>
+                <option value="receipt">Receipt / Struk</option>
+                <option value="purchase_order">Purchase Order</option>
+                <option value="delivery_note">Delivery Note / Surat Jalan</option>
+                <option value="other">Other</option>
+              </select>
             </div>
 
             <!-- Date -->
             <div>
               <div class="flex items-center gap-2 mb-1">
-                <label for="docDate" class="label mb-0">Date</label>
+                <label for="docDate" class="label mb-0">Tanggal / Date</label>
                 <span class="{getConfidenceIconColor(getFieldConfidence('document_date'))} text-xs" title={getConfidenceTip(getFieldConfidence('document_date'))}>{getConfidenceIconText(getFieldConfidence('document_date'))}</span>
               </div>
               <input id="docDate" type="date" bind:value={documentDate} class="input {getConfidenceColor(getFieldConfidence('document_date'))}" />
+            </div>
+
+            <!-- Due Date -->
+            <div>
+              <label for="dueDate" class="label">Due Date / Jatuh Tempo</label>
+              <input id="dueDate" type="date" bind:value={dueDate} class="input" />
             </div>
 
             <!-- Currency -->
@@ -353,23 +432,22 @@
               </div>
               <select id="currency" bind:value={currency} class="input {getConfidenceColor(getFieldConfidence('currency'))}">
                 <option value="">Select</option>
-                <option value="IDR">IDR - Indonesian Rupiah</option>
+                <option value="IDR">IDR - Rupiah</option>
                 <option value="USD">USD - US Dollar</option>
                 <option value="SGD">SGD - Singapore Dollar</option>
                 <option value="EUR">EUR - Euro</option>
                 <option value="GBP">GBP - British Pound</option>
                 <option value="MYR">MYR - Malaysian Ringgit</option>
                 <option value="JPY">JPY - Japanese Yen</option>
+                <option value="AUD">AUD - Australian Dollar</option>
+                <option value="CNY">CNY - Chinese Yuan</option>
               </select>
             </div>
 
-            <!-- Total -->
+            <!-- Payment Method -->
             <div>
-              <div class="flex items-center gap-2 mb-1">
-                <label for="total" class="label mb-0">Total</label>
-                <span class="{getConfidenceIconColor(getFieldConfidence('total'))} text-xs" title={getConfidenceTip(getFieldConfidence('total'))}>{getConfidenceIconText(getFieldConfidence('total'))}</span>
-              </div>
-              <input id="total" type="number" step="0.01" bind:value={total} class="input {getConfidenceColor(getFieldConfidence('total'))}" placeholder="0.00" />
+              <label for="payMethod" class="label">Payment Method</label>
+              <input id="payMethod" type="text" bind:value={paymentMethod} class="input" placeholder="Transfer/SPayLater/COD/etc" />
             </div>
 
             <!-- Subtotal -->
@@ -378,42 +456,55 @@
                 <label for="subtotal" class="label mb-0">Subtotal</label>
                 <span class="{getConfidenceIconColor(getFieldConfidence('subtotal'))} text-xs" title={getConfidenceTip(getFieldConfidence('subtotal'))}>{getConfidenceIconText(getFieldConfidence('subtotal'))}</span>
               </div>
-              <input id="subtotal" type="number" step="0.01" bind:value={subtotal} class="input {getConfidenceColor(getFieldConfidence('subtotal'))}" placeholder="0.00" />
+              <input id="subtotal" type="number" step="0.01" bind:value={subtotal} class="input {getConfidenceColor(getFieldConfidence('subtotal'))}" placeholder="0" />
+            </div>
+
+            <!-- Discount -->
+            <div>
+              <label for="discount" class="label">Diskon / Discount</label>
+              <input id="discount" type="number" step="0.01" bind:value={discount} class="input" placeholder="0" />
+            </div>
+
+            <!-- Shipping -->
+            <div>
+              <label for="shipping" class="label">Ongkir / Shipping</label>
+              <input id="shipping" type="number" step="0.01" bind:value={shipping} class="input" placeholder="0" />
             </div>
 
             <!-- Tax -->
             <div>
               <div class="flex items-center gap-2 mb-1">
-                <label for="tax" class="label mb-0">Tax</label>
+                <label for="tax" class="label mb-0">PPN / Tax</label>
                 <span class="{getConfidenceIconColor(getFieldConfidence('tax'))} text-xs" title={getConfidenceTip(getFieldConfidence('tax'))}>{getConfidenceIconText(getFieldConfidence('tax'))}</span>
               </div>
-              <input id="tax" type="number" step="0.01" bind:value={tax} class="input {getConfidenceColor(getFieldConfidence('tax'))}" placeholder="0.00" />
+              <input id="tax" type="number" step="0.01" bind:value={tax} class="input {getConfidenceColor(getFieldConfidence('tax'))}" placeholder="0" />
             </div>
 
-            <!-- Document Number -->
+            <!-- Tax Rate -->
+            <div>
+              <label for="taxRate" class="label">Tax Rate</label>
+              <input id="taxRate" type="text" bind:value={taxRate} class="input" placeholder="e.g. PPN 11%" />
+            </div>
+
+            <!-- Total -->
             <div>
               <div class="flex items-center gap-2 mb-1">
-                <label for="docNum" class="label mb-0">Document Number</label>
-                <span class="{getConfidenceIconColor(getFieldConfidence('document_number'))} text-xs" title={getConfidenceTip(getFieldConfidence('document_number'))}>{getConfidenceIconText(getFieldConfidence('document_number'))}</span>
+                <label for="total" class="label mb-0">Total Pembayaran</label>
+                <span class="{getConfidenceIconColor(getFieldConfidence('total'))} text-xs" title={getConfidenceTip(getFieldConfidence('total'))}>{getConfidenceIconText(getFieldConfidence('total'))}</span>
               </div>
-              <input id="docNum" type="text" bind:value={documentNumber} class="input {getConfidenceColor(getFieldConfidence('document_number'))}" placeholder="INV-001" />
+              <input id="total" type="number" step="0.01" bind:value={total} class="input {getConfidenceColor(getFieldConfidence('total'))}" placeholder="0" />
             </div>
 
-            <!-- Document Type -->
+            <!-- Payment Terms -->
             <div>
-              <label for="docType" class="label">Type</label>
-              <select id="docType" bind:value={documentType} class="input">
-                <option value="">Select</option>
-                <option value="receipt">Receipt</option>
-                <option value="invoice">Invoice</option>
-                <option value="other">Other</option>
-              </select>
+              <label for="payTerms" class="label">Payment Terms</label>
+              <input id="payTerms" type="text" bind:value={paymentTerms} class="input" placeholder="Net 30 / COD / etc" />
             </div>
 
             <!-- Notes -->
             <div class="sm:col-span-2">
-              <label for="notes" class="label">Notes</label>
-              <textarea id="notes" bind:value={notes} class="input" rows="2" placeholder="Additional notes..."></textarea>
+              <label for="notes" class="label">Notes / Catatan</label>
+              <textarea id="notes" bind:value={notes} class="input" rows="2" placeholder="Catatan tambahan..."></textarea>
             </div>
           </div>
         </div>
@@ -438,16 +529,23 @@
                 <div class="rounded-lg border border-slate-200 p-3 {getItemBorderClass(item.confidence)}">
                   <div class="flex items-start gap-2">
                     <span class="{getConfidenceIconColor(item.confidence)} text-xs mt-2" title={getConfidenceTip(item.confidence)}>{getConfidenceIconText(item.confidence)}</span>
-                    <div class="flex-1 grid grid-cols-1 gap-2 sm:grid-cols-12">
-                      <input type="text" bind:value={item.description} class="input sm:col-span-5" placeholder="Description" />
-                      <input type="number" step="0.01" bind:value={item.quantity} class="input sm:col-span-2" placeholder="Qty" />
-                      <input type="number" step="0.01" bind:value={item.unit_price} class="input sm:col-span-2" placeholder="Price" />
-                      <input type="number" step="0.01" bind:value={item.total} class="input sm:col-span-2" placeholder="Total" />
-                      <button type="button" onclick={() => removeItem(i)} class="text-red-400 hover:text-red-600 sm:col-span-1 flex items-center justify-center" aria-label="Remove item">
-                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                    <div class="flex-1 space-y-2">
+                      <div class="grid grid-cols-1 gap-2 sm:grid-cols-12">
+                        <input type="text" bind:value={item.description} class="input sm:col-span-6" placeholder="Description / Nama produk" />
+                        <input type="text" bind:value={item.sku} class="input sm:col-span-3" placeholder="SKU/Code" />
+                        <input type="text" bind:value={item.unit} class="input sm:col-span-2" placeholder="Unit" />
+                        <button type="button" onclick={() => removeItem(i)} class="text-red-400 hover:text-red-600 sm:col-span-1 flex items-center justify-center" aria-label="Remove item">
+                          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div class="grid grid-cols-4 gap-2">
+                        <input type="number" step="0.01" bind:value={item.quantity} class="input" placeholder="Qty" />
+                        <input type="number" step="0.01" bind:value={item.unit_price} class="input" placeholder="Unit Price" />
+                        <input type="number" step="0.01" bind:value={item.discount} class="input" placeholder="Discount" />
+                        <input type="number" step="0.01" bind:value={item.total} class="input" placeholder="Total" />
+                      </div>
                     </div>
                   </div>
                 </div>
