@@ -1,16 +1,16 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createDocument, createDocumentItems, updateDocument, generateId } from '$lib/server/db';
+import { createDocument, createDocumentItems, updateDocument, generateId, storeFile } from '$lib/server/db';
 import { extractDocument } from '$lib/server/groq';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB (lower limit for D1 storage)
 
 /**
  * POST /api/documents/upload - Upload and process document(s)
  * 
- * For PDFs: client must render to image first and send as `pdf_images[]` (base64 PNG)
- * alongside the original PDF file. If pdf_images is provided, we use those for OCR.
+ * Files stored in D1 (file_storage table) as base64.
+ * For PDFs: client renders to image first and sends as `pdf_images[]`.
  */
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
   if (!locals.user || !platform?.env) {
@@ -19,7 +19,6 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
   const formData = await request.formData();
   const files = formData.getAll('files') as File[];
-  // PDF rendered images sent as base64 strings (one per PDF file, in order)
   const pdfImages = formData.getAll('pdf_images') as string[];
 
   if (!files || files.length === 0) {
@@ -32,7 +31,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
       return json({ error: `Unsupported file type: ${file.type}. Allowed: JPG, PNG, WebP, PDF` }, { status: 400 });
     }
     if (file.size > MAX_FILE_SIZE) {
-      return json({ error: `File ${file.name} exceeds 10MB limit` }, { status: 400 });
+      return json({ error: `File ${file.name} exceeds 5MB limit` }, { status: 400 });
     }
   }
 
@@ -41,17 +40,22 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
   for (const file of files) {
     const docId = generateId();
-    const storageKey = `documents/${locals.user.id}/${docId}/${file.name}`;
+    const storageKey = `${locals.user.id}/${docId}/${file.name}`;
 
     try {
       // 1. Read file content
       const buffer = await file.arrayBuffer();
       const bytes = new Uint8Array(buffer);
+      const fileBase64 = bufferToBase64(bytes);
 
-      // 2. Upload original to R2
-      await platform.env.BUCKET.put(storageKey, bytes, {
-        httpMetadata: { contentType: file.type },
-        customMetadata: { userId: locals.user.id, documentId: docId }
+      // 2. Store file in D1 (file_storage table)
+      await storeFile(platform.env.DB, {
+        id: generateId(),
+        document_id: docId,
+        file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+        data: fileBase64
       });
 
       // 3. Create document record (processing)
@@ -95,7 +99,6 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
       let mimeType: string;
 
       if (file.type === 'application/pdf') {
-        // PDF: use client-rendered image
         const pdfImageData = pdfImages[pdfImageIndex];
         pdfImageIndex++;
 
@@ -103,20 +106,20 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
           throw new Error('PDF image rendering data not provided. Please try again.');
         }
 
-        // pdfImageData is base64 PNG (without data:image/png;base64, prefix)
         imageBase64 = pdfImageData;
         mimeType = 'image/png';
 
-        // Also store the rendered image in R2 for preview
-        const imageBytes = base64ToBuffer(imageBase64);
-        const imageKey = `documents/${locals.user.id}/${docId}/rendered.png`;
-        await platform.env.BUCKET.put(imageKey, imageBytes, {
-          httpMetadata: { contentType: 'image/png' },
-          customMetadata: { userId: locals.user.id, documentId: docId, type: 'rendered' }
+        // Store the rendered image in D1 for preview
+        await storeFile(platform.env.DB, {
+          id: generateId(),
+          document_id: docId,
+          file_name: 'rendered.png',
+          file_type: 'image/png',
+          file_size: Math.ceil(pdfImageData.length * 0.75), // approx decoded size
+          data: pdfImageData
         });
       } else {
-        // Image: send directly
-        imageBase64 = bufferToBase64(bytes);
+        imageBase64 = fileBase64;
         mimeType = file.type;
       }
 
@@ -209,13 +212,4 @@ function bufferToBase64(buffer: Uint8Array): string {
     binary += String.fromCharCode(buffer[i]);
   }
   return btoa(binary);
-}
-
-function base64ToBuffer(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }

@@ -288,3 +288,41 @@ export async function getDocumentItems(db: D1Database, documentId: string): Prom
 export async function deleteDocumentItems(db: D1Database, documentId: string): Promise<void> {
   await db.prepare('DELETE FROM document_items WHERE document_id = ?').bind(documentId).run();
 }
+
+// --- File Storage (D1-based, replaces R2) ---
+
+export interface FileStorageRow {
+  id: string;
+  document_id: string;
+  file_name: string;
+  file_type: string;
+  file_size: number;
+  data: string;  // base64
+  created_at: number;
+}
+
+export async function storeFile(
+  db: D1Database,
+  file: Omit<FileStorageRow, 'created_at'>
+): Promise<void> {
+  await db
+    .prepare('INSERT INTO file_storage (id, document_id, file_name, file_type, file_size, data) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(file.id, file.document_id, file.file_name, file.file_type, file.file_size, file.data)
+    .run();
+}
+
+export async function getFileByDocumentId(
+  db: D1Database,
+  documentId: string,
+  fileName: string
+): Promise<FileStorageRow | null> {
+  const result = await db
+    .prepare('SELECT * FROM file_storage WHERE document_id = ? AND file_name = ?')
+    .bind(documentId, fileName)
+    .first<FileStorageRow>();
+  return result || null;
+}
+
+export async function deleteFilesByDocumentId(db: D1Database, documentId: string): Promise<void> {
+  await db.prepare('DELETE FROM file_storage WHERE document_id = ?').bind(documentId).run();
+}

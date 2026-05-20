@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDocumentById, getDocumentItems, updateDocument, deleteDocument, deleteDocumentItems, createDocumentItems } from '$lib/server/db';
+import { getDocumentById, getDocumentItems, updateDocument, deleteDocument, deleteDocumentItems, createDocumentItems, deleteFilesByDocumentId } from '$lib/server/db';
 
 /**
  * GET /api/documents/:id - Get single document with items
@@ -104,6 +104,9 @@ export const DELETE: RequestHandler = async ({ params, locals, platform }) => {
   try {
     await platform.env.BUCKET.delete(doc.storage_key);
   } catch { /* ignore R2 delete error */ }
+
+  // Delete files from D1 storage
+  await deleteFilesByDocumentId(platform.env.DB, params.id);
 
   // Delete from DB (cascades to items)
   await deleteDocument(platform.env.DB, params.id, locals.user.id);

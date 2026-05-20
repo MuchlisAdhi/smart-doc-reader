@@ -10,12 +10,11 @@ database_name = "smart-doc-reader-db"
 database_id = "cf426cb0-1003-42e6-9fec-99556881024c"
 migrations_dir = "migrations"
 
-# R2 Bucket binding for file storage
-[[r2_buckets]]
-binding = "BUCKET"
-bucket_name = "smart-doc-reader-files"
+# R2 Bucket (disabled - using D1 file_storage instead, no credit card required)
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "smart-doc-reader-files"
 
-# Environment variables (use `wrangler pages secret put` for secrets in production)
 [vars]
 APP_NAME = "Smart Document Reader"
 

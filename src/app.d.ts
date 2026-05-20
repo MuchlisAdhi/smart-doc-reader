@@ -21,7 +21,7 @@ declare global {
     interface Platform {
       env: {
         DB: D1Database;
-        BUCKET: R2Bucket;
+        BUCKET?: R2Bucket;  // Optional - using D1 file_storage instead
         GROQ_API_KEY: string;
         JWT_SECRET: string;
         APP_NAME?: string;
