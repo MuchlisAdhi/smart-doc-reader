@@ -48,17 +48,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
       const bytes = new Uint8Array(buffer);
       const fileBase64 = bufferToBase64(bytes);
 
-      // 2. Store file in D1 (file_storage table)
-      await storeFile(platform.env.DB, {
-        id: generateId(),
-        document_id: docId,
-        file_name: file.name,
-        file_type: file.type,
-        file_size: file.size,
-        data: fileBase64
-      });
-
-      // 3. Create document record (processing)
+      // 2. Create document record FIRST (file_storage has FK to documents)
       await createDocument(platform.env.DB, {
         id: docId,
         user_id: locals.user.id,
@@ -92,6 +82,16 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
         status: 'processing',
         error_message: null,
         is_verified: 0
+      });
+
+      // 3. Store file in D1 (file_storage table - after document exists)
+      await storeFile(platform.env.DB, {
+        id: generateId(),
+        document_id: docId,
+        file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+        data: fileBase64
       });
 
       // 4. Determine image data for Groq Vision
