@@ -1,22 +1,40 @@
-# Sample Receipts / Invoices for Testing
+# Sample Invoice B2B untuk Pengujian
 
-These sample documents can be used to test the Smart Document Reader application.
+Folder ini berisi 3 contoh invoice B2B Indonesia yang bisa digunakan untuk menguji aplikasi.
 
-## Files included:
+## Files
 
-1. **sample-receipt-1.jpg** - Simple retail receipt (grocery store)
-2. **sample-invoice-1.png** - Basic invoice with line items
-3. **sample-receipt-2.jpg** - Restaurant receipt with tax
+1. **invoice-conbloc-internusa.jpg** — Invoice PT. Conbloc Internusa (material bangunan/paving block)
+   - Buyer: Rangga Persada, CV
+   - Total: Rp 530,278,984.65
+   - 10 line items, PPN, format invoice klasik Indonesia
+   - Syarat pembayaran COD, transfer BCA/Mandiri
 
-## How to use:
+2. **invoice-citra-aberta.jpg** — Invoice PT. Citra Aberta Cemerlang (alat berat/konstruksi)
+   - Buyer: CV Sinar Mas Cemerlang
+   - Total: Rp 27,900,000.00
+   - 7 items (genset, molen, scrafolding, dll)
+   - Payment: Bank Transfer, Net 30 days
 
-1. Log in to the application
-2. Go to Upload page
-3. Drag & drop or select these files
-4. Wait for AI processing
-5. Review and verify extracted data
+3. **invoice-kalimantan-inti-maju.jpg** — Invoice PT. Kalimantan Inti Maju (jasa unloading barge)
+   - Buyer: PT. Kutai Chip Mill
+   - Total: Rp 205,362,482
+   - PPN 10% + PPH 2%
+   - Transfer Bank Danamon
 
-## Notes:
-- These are example files for demonstration purposes
-- Real receipts from your own testing should be used for comprehensive testing
-- The AI handles both English and Indonesian documents
+## Cara Menguji
+
+1. Login ke aplikasi
+2. Pergi ke halaman Upload
+3. Drag & drop atau pilih file-file di atas
+4. Tunggu AI memproses (1-3 detik per file)
+5. Review hasil extraction — perhatikan:
+   - Confidence score tiap field
+   - Line items yang ter-extract
+   - Jumlah angka (format Rp Indonesia)
+   - Buyer/vendor terdeteksi benar
+
+## Catatan
+- File asli disimpan di folder ini sebagai referensi
+- Data sensitif yang terlihat sudah bersifat publik (contoh invoice umum)
+- Gunakan untuk demo dan testing saja

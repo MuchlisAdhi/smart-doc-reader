@@ -103,9 +103,5 @@
         <a href="/register" class="text-brand-600 hover:text-brand-700 font-medium">Sign up</a>
       </p>
     </form>
-
-    <p class="mt-4 text-center text-xs text-slate-400">
-      Demo: demo@superbrands.test / demo1234
-    </p>
   </div>
 </div>
